@@ -42,4 +42,6 @@ df = df.sort_values(by="timestamp")
 df = df [df["timestamp"] >= dates[0]]
 df = df [df["timestamp"] < dates[-1]]
 print(df)
-df.to_csv("tutorial.csv", index=False)
+name = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+
+df.to_csv(f"{name}.csv", index=False)

@@ -10,8 +10,14 @@ import sys
 
 client = Client(config("API_KEY"), config("SECRET_KEY"), testnet= True)
 asset = "BTCUSDT"
-balance = client.get_asset_balance(asset= "BTC")
 
+
+def get_balance():
+    balanceAsset = float(client.get_asset_balance(asset="BTC")['free'])
+    balanceUSD = float(client.get_historical_klines(
+    asset, Client.KLINE_INTERVAL_1MINUTE, limit=1)[0][4]) * balanceAsset
+    balanceCash = float(client.get_asset_balance(asset='USDT')['free'])
+    return [balanceAsset, balanceUSD, balanceCash]
 def fetch_klines(asset):
     klines = client.get_historical_klines(asset, Client.KLINE_INTERVAL_1MINUTE,
                                           "1 hour ago UTC")
@@ -33,9 +39,10 @@ def get_rsi(asset):
     return klines['rsi'].iloc[-1]
 
 def create_account():
+     balance = get_balance()
      account = {
          "is_buying":True,
-         "assets":{},
+         "balance":[balance[0], balance[1], balance[2]]
      }
      with open("bot_account.json", "w") as F:
          F.write(json.dumps(account)) 
@@ -60,6 +67,7 @@ def do_trade(account, client, asset, side, quantity):
             quantity = quantity
         )
         account['is_buying'] = False
+        account['balance'] = get_balance()
     
     else:
         order = client.order_market_sell(
@@ -67,6 +75,7 @@ def do_trade(account, client, asset, side, quantity):
             quantity = quantity
         )
         account['is_buying'] = True
+        account['balance'] = client.get_balance()
     order_id = order["orderId"]
     while order["status"] != "FILLED":
         order = client.get_order(
@@ -110,7 +119,11 @@ while True:
             create_account()
         with open("bot_account.json") as f:
             account = json.load(f)
-        print(account)
+        now = datetime.datetime.now()
+        today = now.strftime("%Y-%m-%d")
+        hms = now.strftime("%H:%M:%S")
+        print(f"{today} {hms} is_buying:{account['is_buying']} / BTC:{account['balance'][0]} / BTCUSD:{account['balance'][1]} / USD:{account['balance'][2]}")
+        #print(f"{today} {hms} {account}")
         old_rsi = rsi
         rsi = get_rsi(asset=asset)
         if account["is_buying"]:
@@ -118,8 +131,8 @@ while True:
                 do_trade(account, client, asset, "buy", "0.01")
             if rsi > exit and old_rsi < exit:
                 do_trade(account, client, asset, "sell","0.01")
-        print(rsi)
-        time.sleep(10)
+        print(f"RSI: {old_rsi} --> {rsi}\n\n")
+        time.sleep(5)
     except Exception as exception:
         log("ERROR:  " + str(exception))
         sys.exit()
